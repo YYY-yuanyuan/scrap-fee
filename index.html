@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>仓库报废费用计算器 · 出库费 + 销毁费</title>
+<style>
+  :root{
+    --bg:#eef2f7; --card:#ffffff; --ink:#16202e; --sub:#64748b; --line:#e2e8f0;
+    --brand:#2563eb; --brand-soft:#eff6ff; --ok:#0f766e; --warn:#b45309; --bad:#b91c1c;
+    --chip:#f1f5f9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.55 "Microsoft YaHei","PingFang SC","Helvetica Neue",Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:22px 18px 60px}
+  header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+  h1{font-size:21px;margin:0 0 4px}
+  .sub{color:var(--sub);font-size:12.5px}
+  .ratebox{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--sub);line-height:1.9}
+  .ratebox b{color:var(--ink)}
+  .ratebox input{width:76px;border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-size:12px;text-align:right}
+  .grid{display:grid;grid-template-columns:minmax(320px,1fr) minmax(340px,1.15fr);gap:16px}
+  @media (max-width:860px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .card h2{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .card h2 .n{background:var(--brand-soft);color:var(--brand);border-radius:6px;font-size:11px;padding:2px 7px}
+  label.f{display:block;font-size:12px;color:var(--sub);margin:12px 0 5px}
+  select,input[type=number],input[type=text],textarea{
+    width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:9px 10px;font-size:14px;background:#fff;color:var(--ink);font-family:inherit}
+  select:focus,input:focus,textarea:focus{outline:2px solid #bfdbfe;border-color:var(--brand)}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+  .unitpill{display:inline-flex;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;margin-top:5px}
+  .unitpill button{border:0;background:#fff;padding:5px 12px;font-size:12px;cursor:pointer;color:var(--sub)}
+  .unitpill button.on{background:var(--brand);color:#fff}
+  .modes{display:flex;gap:8px;margin-bottom:6px}
+  .modes button{flex:1;border:1px solid #cbd5e1;background:#fff;border-radius:9px;padding:8px;font-size:12.5px;cursor:pointer;color:var(--sub)}
+  .modes button.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+  .btn{width:100%;margin-top:16px;border:0;border-radius:10px;padding:12px;background:var(--brand);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+  .btn:hover{background:#1d4ed8}
+  .btn.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand);font-weight:500;font-size:13px;padding:9px;margin-top:10px}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+  .kpi{background:var(--chip);border-radius:11px;padding:10px 12px}
+  .kpi .k{font-size:11.5px;color:var(--sub)}
+  .kpi .v{font-size:19px;font-weight:700;letter-spacing:.2px;margin-top:2px}
+  .kpi .u{font-size:11px;color:var(--sub);font-weight:400}
+  .usdbar{margin:2px 0 14px;background:linear-gradient(90deg,#0f766e,#0d9488);color:#fff;border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+  .usdbar .l{font-size:12px;opacity:.9}
+  .usdbar .v{font-size:24px;font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--sub);font-weight:500;background:#f8fafc}
+  tfoot td{font-weight:700;border-top:2px solid var(--line)}
+  .note{font-size:12px;color:var(--sub);background:#f8fafc;border-left:3px solid #cbd5e1;border-radius:6px;padding:8px 10px;margin-top:12px;white-space:pre-wrap}
+  .flag{color:var(--warn);font-size:12px;margin-top:10px}
+  .flag.bad{color:var(--bad)}
+  .hint{font-size:11.5px;color:var(--sub);margin-top:5px}
+  details{margin-top:14px}
+  summary{cursor:pointer;font-size:12.5px;color:var(--brand)}
+  details .note{margin-top:10px}
+  .tag{display:inline-block;background:var(--brand-soft);color:var(--brand);border-radius:6px;padding:1px 6px;font-size:11px;margin-left:6px}
+  .empty{color:var(--sub);font-size:12.5px;padding:14px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>仓库报废费用计算器</h1>
+      <div class="sub">出库费 + 销毁费 · 按重量区间自动定档 · 多币种统一折算美金（USD）</div>
+    </div>
+    <div class="ratebox">
+      汇率（1 USD =）<br>
+      EUR <input id="rEUR" type="number" step="0.000001" value="0.892629"> &nbsp;
+      GBP <input id="rGBP" type="number" step="0.000001" value="0.755605"> &nbsp;
+      CAD <input id="rCAD" type="number" step="0.000001" value="1.425643">
+      <br><span id="rateSrc">汇率来源：open.er-api.com</span> · <a href="#" id="refresh" style="color:var(--brand)">刷新</a>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- 输入 -->
+    <section class="card">
+      <h2><span class="n">1</span> 输入参数</h2>
+
+      <label class="f">仓库代码</label>
+      <select id="wh"></select>
+      <div class="hint" id="whInfo"></div>
+
+      <label class="f">计费口径</label>
+      <div class="modes">
+        <button id="mSingle" class="on" type="button">单件计算</button>
+        <button id="mBatch" type="button">批量（多行）</button>
+      </div>
+
+      <div id="paneSingle">
+        <label class="f">单个 SKU 实重（按重量定档的基准重量）</label>
+        <div class="row">
+          <input id="w" type="number" step="0.01" min="0" value="2.5">
+          <div style="flex:0 0 96px"><input id="wUnitLabel" type="text" value="KG" readonly style="text-align:center;background:#f8fafc"></div>
+        </div>
+        <div class="unitpill" id="unitPill">
+          <button type="button" data-u="KG" class="on">KG</button>
+          <button type="button" data-u="LB">LB</button>
+        </div>
+        <div class="hint" id="unitHint"></div>
+
+        <label class="f">件数 PCS</label>
+        <input id="pcs" type="number" step="1" min="1" value="1">
+      </div>
+
+      <div id="paneBatch" style="display:none">
+        <label class="f">每行一条：重量,件数（件数可省略，默认 1）</label>
+        <textarea id="batch" rows="7" spellcheck="false">2.5,3
+0.4,10
+12,1
+55,2</textarea>
+        <div class="hint">重量单位跟随上方 KG/LB 选择；每条的重量段分别定档后汇总。</div>
+        <button class="btn ghost" id="calcBatch" type="button">批量计算</button>
+      </div>
+
+      <button class="btn" id="calc" type="button">计算费用</button>
+      <div class="hint">出库费按变动重量区间定档；销毁费 = 销毁单价 × 计费重量。</div>
+    </section>
+
+    <!-- 结果 -->
+    <section class="card">
+      <h2><span class="n">2</span> 计算结果</h2>
+      <div id="result"><div class="empty">选择仓库、填写重量后点击「计算费用」。</div></div>
+    </section>
+  </div>
+
+  <details>
+    <summary>计价口径与假设说明（点击展开）</summary>
+    <div class="note" id="assumptions"></div>
+  </details>
+</div>
+
+<script>
+/* ============ 价卡数据（来源：仓库销毁费用表.xlsx） ============ */
+// bands: [下限(不含), 上限(含), 单价, 区间文字]；>阈值的续重：over:{base, perKg, from}
+const PRICING = {
+  "DENW01P": {country:"德国", ccy:"EUR", dUnit:"kg", dRate:0.52, basis:"pcs", outName:"出库操作费", outUnit:"/件（PCS）",
+    bands:[[0,0.5,0.82,"0<重量≤0.5KG"],[0.5,1,0.82,"0.5<重量≤1KG"],[1,3,1.02,"1<重量≤3KG"],[3,5,1.02,"3<重量≤5KG"],
+           [5,10,1.43,"5<重量≤10KG"],[10,15,1.84,"10<重量≤15KG"],[15,20,1.84,"15<重量≤20KG"],[20,25,1.84,"20<重量≤25KG"],
+           [25,30,1.84,"25<重量≤30KG"],[30,35,3.06,"30<重量≤35KG"],[35,40,3.06,"35<重量≤40KG"],[40,45,3.06,"40<重量≤45KG"],
+           [45,50,3.06,"45<重量≤50KG"]],
+    over:{from:50, base:3.06, perKg:0.3, label:"50KG以上 续重 0.3/KG"}},
+
+  "GBMA01P": {country:"英国", ccy:"GBP", dUnit:"kg", dRate:0.45, basis:"pcs", outName:"出库处理费", outUnit:"GBP/Item",
+    bands:[[0,0.5,0.117,"0＜X≤0.5"],[0.5,1,0.1215,"0.5＜X≤1"],[1,3,0.1935,"1＜X≤3"],[3,5,0.2835,"3＜X≤5"],
+           [5,10,0.4725,"5＜X≤10"],[10,15,0.6615,"10＜X≤15"],[15,23,0.9585,"15＜X≤23"],[23,30,1.575,"23＜X≤30"],
+           [30,40,2.187,"30＜X≤40"]],
+    over:{from:40, base:2.187, perKg:0.063, label:"40KG以上 续重 0.063 GBP/kg"}},
+
+  "FR-PSJ01": {country:"法国", ccy:"EUR", dUnit:"kg", dRate:0.7, basis:"pcs", outName:"标准B2C出库操作费", outUnit:"/件",
+    bands:[[0,1,0.46,"0<X≤1KG"],[1,2,0.64,"1<X≤2KG"],[2,5,0.75,"2<X≤5KG"],[5,10,1.1,"5<X≤10KG"],
+           [10,20,1.1,"10<X≤20KG"],[20,30,2.53,"20<X≤30KG"]],
+    over:{from:30, base:0, perKg:0.07, label:">30KG 按 0.07/KG 计（不叠加首重）"}},
+
+  "ES-PSJ01": {country:"西班牙", ccy:"EUR", dUnit:"kg", dRate:0.7, basis:"pcs", outName:"标准B2C出库操作费", outUnit:"/件",
+    bands:[[0,1,0.46,"0<X≤1KG"],[1,2,0.64,"1<X≤2KG"],[2,5,0.75,"2<X≤5KG"],[5,10,1.1,"5<X≤10KG"],
+           [10,20,1.1,"10<X≤20KG"],[20,30,2.53,"20<X≤30KG"]],
+    over:{from:30, base:0, perKg:0.07, label:">30KG 按 0.07/KG 计（不叠加首重）"}},
+
+  "SK-DEHS01": {country:"德国SK", ccy:"EUR", dUnit:"kg", dRate:0.7, basis:"ticket", outName:"操作费", outUnit:"/票",
+    bands:[[0,0.5,0.25,"0<W≤0.5kg"],[0.5,1,0.3,"0.5<W≤1kg"],[1,3,0.39,"1<W≤3kg"],[3,5,0.7,"3<W≤5kg"],
+           [5,10,1.15,"5<W≤10kg"],[10,20,1.2,"10<W≤20kg"],[20,30,1.7,"20<W≤30kg"],[30,40,3,"30<W≤40kg"],
+           [40,null,6,"40kg+"]],
+    extraPcs:{rate:0.25, label:"续件费 0.25/PCS"}},
+
+  "BKS-FRBR01": {country:"法国BKS", ccy:"EUR", dUnit:"kg", dRate:0.6, basis:"pcs", outName:"操作费", outUnit:"/件（PCS）",
+    flat:0.2, bands:[[0,null,0.2,"不分重量段 0.2/件"]]},
+
+  "UK01-4PX": {country:"英国", ccy:"GBP", dUnit:"kg", dRate:0.5, basis:"pcs", outName:"出库操作费", outUnit:"/件",
+    bands:[[0,0.5,0.25,"0<W≤0.5KG"],[0.5,1,0.3,"0.5<W≤1KG"],[1,3,0.36,"1<W≤3KG"],[3,5,0.58,"3<W≤5KG"],
+           [5,10,0.62,"5<W≤10KG"],[10,15,0.62,"10<W≤15KG"],[15,20,0.62,"15<W≤20KG"],[20,30,1.17,"20<W≤30KG"],
+           [30,40,1.75,"30<W≤40KG"],[40,50,1.75,"40<W≤50KG"]],
+    over:{from:50, base:0, perKg:3.4, mode:"flat", label:"W>50KG 按 3.4/件"}},
+
+  "4PX-DERP02": {country:"德国", ccy:"EUR", dUnit:"kg", dRate:0.35, basis:"pcs", outName:"出库操作费", outUnit:"/件",
+    bands:[[0,0.5,0.27,"0<W≤0.5KG"],[0.5,1,0.33,"0.5<W≤1KG"],[1,3,0.42,"1<W≤3KG"],[3,5,0.66,"3<W≤5KG"],
+           [5,10,0.77,"5<W≤10KG"],[10,15,0.77,"10<W≤15KG"],[15,20,0.77,"15<W≤20KG"],[20,30,1.22,"20<W≤30KG"],
+           [30,40,1.68,"30<W≤40KG"],[40,50,1.93,"40<W≤50KG"]],
+    over:{from:50, base:0, perKg:3.79, mode:"flat", label:"W>50KG 按 3.79/件"}},
+
+  "YS-CAAB03": {country:"加拿大-多伦多", ccy:"CAD", dUnit:"lb", dRate:0.1, basis:"pcs", outName:"仓配订单拣货费", outUnit:"/件",
+    bands:[[0,70,2.9,"0-70 LBS"],[70,150,4.35,"70.01-150 LBS"]]},
+  "YS-CAAB02": {country:"加拿大-多伦多", ccy:"CAD", dUnit:"lb", dRate:0.1, basis:"pcs", outName:"仓配订单拣货费", outUnit:"/件",
+    bands:[[0,70,2.9,"0-70 LBS"],[70,150,4.35,"70.01-150 LBS"]]},
+  "云上-AB":   {country:"加拿大-卡尔加里", ccy:"CAD", dUnit:"lb", dRate:0.1, basis:"pcs", outName:"仓配订单拣货费", outUnit:"/件",
+    bands:[[0,70,2.9,"0-70 LBS"],[70,150,4.35,"70.01-150 LBS"]]},
+  "云上-ONT":  {country:"加拿大-卡尔加里", ccy:"CAD", dUnit:"lb", dRate:0.1, basis:"pcs", outName:"仓配订单拣货费", outUnit:"/件",
+    bands:[[0,70,2.9,"0-70 LBS"],[70,150,4.35,"70.01-150 LBS"]]}
+};
+const WH_ORDER = ["DENW01P","GBMA01P","FR-PSJ01","ES-PSJ01","SK-DEHS01","BKS-FRBR01",
+                  "UK01-4PX","4PX-DERP02","YS-CAAB03","YS-CAAB02","云上-AB","云上-ONT"];
+const CCY_SYMBOL = {EUR:"€", GBP:"£", CAD:"C$", USD:"$"};
+const LB_PER_KG = 2.2046226218;
+
+/* ============ 汇率 ============ */
+const RATE_FALLBACK = {EUR:0.892629, GBP:0.755605, CAD:1.425643,
+  src:"内置汇率（2026-10-12 UTC）"};
+window.RATES = Object.assign({}, RATE_FALLBACK);
+function rateOf(ccy){           // 1 USD = rate ccy  →  ccy → USD = amount / rate
+  if(ccy==="USD") return 1;
+  const el = document.getElementById("r"+ccy);
+  const v = el ? parseFloat(el.value) : NaN;
+  return (v && v>0) ? v : RATE_FALLBACK[ccy];
+}
+function toUSD(amount, ccy){ return amount / rateOf(ccy); }
+
+async function loadRates(){
+  try{
+    const r = await fetch("https://open.er-api.com/v6/latest/USD", {cache:"no-store"});
+    const j = await r.json();
+    if(j && j.rates){
+      ["EUR","GBP","CAD"].forEach(c=>{
+        if(j.rates[c]){ window.RATES[c]=j.rates[c]; document.getElementById("r"+c).value = j.rates[c]; }
+      });
+      document.getElementById("rateSrc").textContent =
+        "实时汇率（open.er-api.com " + (j.time_last_update_utc||"") + "）";
+    }
+  }catch(e){
+    document.getElementById("rateSrc").textContent =
+      "离线：使用内置汇率（2026-10-12）+ 可手动修改";
+  }
+}
+
+/* ============ 核心计算 ============ */
+function pickBand(wh, w){
+  const cfg = PRICING[wh]; const bands = cfg.bands;
+  for(const b of bands){ if(w > b[0] && (b[1]===null || w <= b[1])) return {price:b[2], label:b[3]}; }
+  // 低于/等于最小下限（例如 weight=0 或 lb 中的 0）
+  if(w<=0) return {price:null, label:"重量需大于 0"};
+  const last = bands[bands.length-1];
+  if(cfg.over) return {over:true, label:cfg.over.label};
+  return {price:last[2], label:last[3]+"（超出价卡，按最高档估算）", overflow:true};
+}
+
+/** 单条记录计算
+ *  wh: 仓库代码; weight: 数字(输入单位); pcs: 件数; unit: "KG"|"LB"（输入单位）
+ */
+function calcRecord(wh, weight, pcs, unit){
+  const cfg = PRICING[wh];
+  pcs = Math.max(1, Math.round(pcs||1));
+  const w = Number(weight);
+  const flags = [];
+  if(!(w>0)) return {error:"重量必须大于 0"};
+
+  // 单位换算：计价单位 = cfg.dUnit(kg 或 lb)
+  unit = String(unit||cfg.dUnit).toLowerCase();
+  const wPriced = (unit===cfg.dUnit) ? w
+      : (cfg.dUnit==="kg" ? w*0.45359237 : w*LB_PER_KG);
+  const totPriced = wPriced*pcs;
+  const unitLabel = unit.toUpperCase();
+
+  // ── 出库费 ──
+  const outRows = [];
+  let out = 0;
+  const perUnitBands = (cfg.basis==="pcs");      // 按件/单件定档
+  const baseW = perUnitBands ? wPriced : totPriced;   // /票 类按该票总重定档
+  const b = pickBand(wh, baseW);
+  if(cfg.flat!=null){
+    out = cfg.flat*pcs;
+    outRows.push({t:cfg.outName, seg:"不分重量段 " + cfg.flat + cfg.outUnit, q:fmt(pcs)+" 件", amt:out});
+  }else if(b.over){
+    const ov = cfg.over;
+    let unitAmt;
+    if(ov.mode==="flat"){ unitAmt = ov.perKg; }                    // 超过阈值统一单价（如 3.4/件）
+    else if(ov.base){ unitAmt = ov.base + ov.perKg*(baseW-ov.from); } // 首重档价 + 续重
+    else { unitAmt = ov.perKg*baseW; }                              // 纯单价×重量
+    out = unitAmt * (perUnitBands?pcs:1);
+    outRows.push({t:cfg.outName, seg:ov.label + "（本次 " + fmt(baseW) + " " + cfg.dUnit.toUpperCase() + "）",
+                  q:(perUnitBands?fmt(pcs)+" 件":"1 票"), amt:out});
+    outRows.push({t:"", seg:ov.mode==="flat" ? "超出阈值按固定单价 " + ov.perKg + cfg.outUnit
+                 : (ov.base ? "= " + ov.base + "（" + ov.from + cfg.dUnit.toUpperCase() + "内最高档）+ " + ov.perKg + "×(" + fmt(baseW) + "-" + ov.from + ")"
+                            : "= " + ov.perKg + " × " + fmt(baseW)), q:"", amt:null});
+  }else if(b.price==null){
+    return {error:b.label};
+  }else{
+    out = b.price*(perUnitBands?pcs:1);
+    outRows.push({t:cfg.outName, seg:"命中区间 " + b.label + " → " + b.price + cfg.outUnit,
+                  q:(perUnitBands?fmt(pcs)+" 件":"1 票"), amt:out});
+    if(b.overflow) flags.push("实重超出价卡最高区间，按 " + b.label.replace("（超出价卡，按最高档估算）","") + " 估算，请与仓库确认。");
+  }
+  if(cfg.extraPcs && pcs>1){
+    const e = cfg.extraPcs.rate*(pcs-1);
+    out += e;
+    outRows.push({t:"续件费", seg:cfg.extraPcs.label + " × " + fmt(pcs-1) + " 件", q:"", amt:e});
+  }
+
+  // ── 销毁费 ──
+  const destroy = cfg.dRate*totPriced;
+  const destroyRows = [
+    {t:"销毁费", seg:cfg.dRate + " " + cfg.ccy + "/" + cfg.dUnit.toUpperCase()
+        + " × " + fmt(wPriced) + " " + cfg.dUnit.toUpperCase() + " × " + fmt(pcs) + " 件", q:"", amt:destroy}
+  ];
+
+  const total = round2(out) + round2(destroy);
+  return {
+    wh, ccy:cfg.currency0||cfg.ccy, pcs,
+    wInput:w, unitInput:unitLabel, wPriced:round4(wPriced), totPriced:round4(totPriced),
+    dUnit:cfg.dUnit, out:round2(out), destroy:round2(destroy), total:round2(total),
+    usd:round4(toUSD(round2(total), cfg.ccy)),
+    outRows, destroyRows, flags, cfg
+  };
+}
+function round2(x){ return Math.round(x*100)/100; }
+function round4(x){ return Math.round(x*10000)/10000; }
+function fmt(x){ return (Math.round(x*10000)/10000).toString(); }
+function money(x, ccy){
+  const s = CCY_SYMBOL[ccy]||"";
+  return s + (Math.round(x*100)/100).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function usdStr(x){
+  return "$" + (Math.round(x*10000)/10000).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:4});
+}
+
+/* ============ UI ============ */
+let CUR_WH = "DENW01P";
+function $(id){ return document.getElementById(id); }
+
+function initWh(){
+  const sel = $("wh");
+  sel.innerHTML = WH_ORDER.map(w=>{
+    const c = PRICING[w];
+    return `<option value="${w}">${w}（${c.country} · ${c.ccy}）</option>`;
+  }).join("");
+  sel.value = CUR_WH;
+  sel.onchange = ()=>{ CUR_WH = sel.value; syncWh(); };
+  syncWh();
+  syncUnit();
+}
+function syncWh(){
+  const c = PRICING[CUR_WH];
+  $("whInfo").textContent = `销毁费 ${c.dRate} ${c.ccy}/${c.dUnit.toUpperCase()} · 出库费：${c.outName}（${c.basis==="pcs"?"按单件档 × 件数":"按票计费（总重定档）"}）`;
+  // 单位偏好跟随仓库计价单位
+  curUnit = c.dUnit.toUpperCase();
+  syncUnit();
+}
+let curUnit = "KG";
+function syncUnit(){
+  document.querySelectorAll("#unitPill button").forEach(b=>b.classList.toggle("on", b.dataset.u===curUnit));
+  $("wUnitLabel").value = curUnit;
+  const c = PRICING[CUR_WH];
+  $("unitHint").textContent = (curUnit.toLowerCase()===c.dUnit)
+    ? `与仓库计价单位一致（${c.dUnit.toUpperCase()}）`
+    : `输入 ${curUnit}，自动折算为 ${c.dUnit.toUpperCase()} 后计价（1 KG = 2.20462 LB）`;
+}
+
+function renderSingle(r){
+  if(r.error){ $("result").innerHTML = `<div class="flag bad">无法计算：${r.error}</div>`; return; }
+  const rows = r.outRows.concat(r.destroyRows).map(x=>
+    `<tr><td>${x.t||""}</td><td style="text-align:left;color:#475569">${x.seg}</td><td>${x.q||""}</td>`+
+    `<td>${x.amt==null?"":money(x.amt, r.cfg.ccy)}</td></tr>`).join("");
+  const flagHtml = r.flags.map(f=>`<div class="flag">⚠ ${f}</div>`).join("");
+  $("result").innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="k">出库费</div><div class="v">${money(r.out, r.cfg.ccy)}</div><div class="u">${r.cfg.ccy}</div></div>
+      <div class="kpi"><div class="k">销毁费</div><div class="v">${money(r.destroy, r.cfg.ccy)}</div><div class="u">${r.cfg.ccy}</div></div>
+      <div class="kpi"><div class="k">合计（原币）</div><div class="v">${money(r.total, r.cfg.ccy)}</div><div class="u">${r.cfg.ccy}</div></div>
+    </div>
+    <div class="usdbar"><div class="l">折合美金 USD<br>1 ${r.cfg.ccy} = ${(1/rateOf(r.cfg.ccy)).toFixed(6)} USD</div>
+      <div class="v">${usdStr(r.usd)}</div></div>
+    <table>
+      <thead><tr><th>费用项</th><th style="text-align:left">区间 / 算式</th><th>数量</th><th>金额</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="note">仓库：${r.wh}（${r.cfg.country}） · 币种：${r.cfg.ccy}
+计费口径：${r.cfg.basis==="pcs" ? "出库费 = 单件实重定档价 × 件数" : "出库费 = 该票总重定档价（/票）"}
+输入：${fmt(r.wInput)} ${r.unitInput}${r.unitInput.toLowerCase()!==r.dUnit ? " → 折算 " + fmt(r.wPriced)+" "+r.dUnit.toUpperCase() : ""} × ${fmt(r.pcs)} 件
+销毁计费重量：${fmt(r.totPriced)} ${r.dUnit.toUpperCase()}（= 单件 ${fmt(r.wPriced)} × ${fmt(r.pcs)} 件）</div>
+    ${flagHtml}`;
+}
+
+function renderBatch(list){
+  const ccy = PRICING[CUR_WH].ccy;
+  let sumOut=0, sumDes=0, sumTot=0, sumUsd=0, n=0;
+  const body = list.map((r,i)=>{
+    if(r.error) return `<tr><td>#${i+1}</td><td colspan="6" style="text-align:left;color:#b91c1c">${r.error}</td></tr>`;
+    sumOut+=r.out; sumDes+=r.destroy; sumTot+=r.total; sumUsd+=r.usd; n++;
+    return `<tr><td>#${i+1} ${r.wh}</td><td>${fmt(r.wInput)} ${r.unitInput}</td><td>${fmt(r.pcs)}</td>
+      <td>${money(r.out,ccy)}</td><td>${money(r.destroy,ccy)}</td><td>${money(r.total,ccy)}</td><td>${usdStr(r.usd)}</td></tr>`;
+  }).join("");
+  $("result").innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="k">出库费合计</div><div class="v">${money(sumOut,ccy)}</div><div class="u">${ccy}</div></div>
+      <div class="kpi"><div class="k">销毁费合计</div><div class="v">${money(sumDes,ccy)}</div><div class="u">${ccy}</div></div>
+      <div class="kpi"><div class="k">总计（原币）</div><div class="v">${money(sumTot,ccy)}</div><div class="u">${ccy} · ${n} 行</div></div>
+    </div>
+    <div class="usdbar"><div class="l">全部折合美金 USD</div><div class="v">${usdStr(sumUsd)}</div></div>
+    <table>
+      <thead><tr><th>行</th><th>重量</th><th>件数</th><th>出库费</th><th>销毁费</th><th>合计(${ccy})</th><th>合计(USD)</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr><td colspan="3">合计</td><td>${money(sumOut,ccy)}</td><td>${money(sumDes,ccy)}</td><td>${money(sumTot,ccy)}</td><td>${usdStr(sumUsd)}</td></tr></tfoot>
+    </table>
+    <button class="btn ghost" id="csv" type="button">导出 CSV（含 BOM，Excel 可直接打开）</button>`;
+  const rowsForCsv = list.filter(r=>!r.error);
+  $("csv").onclick = ()=>exportCSV(rowsForCsv);
+}
+
+function exportCSV(list){
+  const ccy = PRICING[CUR_WH].ccy;
+  const head = ["仓库","国家","单件重量","单位","件数","出库费","销毁费","合计原币","币种","合计USD","汇率(1USD=)"];
+  const lines = [head.join(",")];
+  list.forEach(r=>{
+    lines.push([r.wh, r.cfg.country, fmt(r.wInput), r.unitInput, fmt(r.pcs),
+      r.out.toFixed(2), r.destroy.toFixed(2), r.total.toFixed(2), r.cfg.ccy,
+      r.usd.toFixed(4), rateOf(r.cfg.ccy).toFixed(6)].join(","));
+  });
+  const sum = list.reduce((a,r)=>({o:a.o+r.out, d:a.d+r.destroy, t:a.t+r.total, u:a.u+r.usd}),{o:0,d:0,t:0,u:0});
+  lines.push(["合计","","","","",sum.o.toFixed(2),sum.d.toFixed(2),sum.t.toFixed(2),ccy,sum.u.toFixed(4),""].join(","));
+  const blob = new Blob(["\uFEFF"+lines.join("\r\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "报废费用_" + CUR_WH + "_" + new Date().toISOString().slice(0,10) + ".csv";
+  a.click();
+}
+
+function parseBatch(text){
+  const out = [];
+  text.split(/\r?\n/).forEach(line=>{
+    const s = line.trim(); if(!s) return;
+    const p = s.split(/[,，\t;；]+/).map(x=>x.trim());
+    const w = parseFloat(p[0]); const pcs = p[1]?parseFloat(p[1]):1;
+    if(isNaN(w)) { out.push({error:"无法识别的重量：" + s}); return; }
+    out.push(calcRecord(CUR_WH, w, isNaN(pcs)?1:pcs, curUnit));
+  });
+  return out;
+}
+
+function assumptions(){
+  const L = [];
+  L.push("① 数据来源：仓库销毁费用表.xlsx（销毁费率 + 各仓出库操作费价卡）。");
+  L.push("② 销毁费率：" + WH_ORDER.map(w=>`${w} ${PRICING[w].dRate} ${PRICING[w].ccy}/${PRICING[w].dUnit.toUpperCase()}`).join("；") + "。");
+  L.push("③ 销毁费 = 销毁单价 × 计费重量（计费重量 = 单件实重 × 件数）。加拿大仓按 LB 计价，输入 KG 时按 1 KG = 2.20462 LB 折算。");
+  L.push("④ 出库费定档：欧/英/加仓按「单个 SKU 实重」落入区间取值再 × 件数；SK-DEHS01 价卡单位为 /票，故按该票总重定档，并在件数 >1 时加收续件费 0.25/PCS。");
+  L.push("⑤ 超出最高区间的处理：DENW01P(>50KG) = 45–50KG 档价 3.06 + 0.3×(W-50)；GBMA01P(>40KG) = 2.187 + 0.063×(W-40)；FR-PSJ01/ES-PSJ01(>30KG) = 0.07×W；UK01-4PX(>50KG)=3.4/件；4PX-DERP02(>50KG)=3.79/件。加拿大仓最高只到 150 LBS，超出会提示按最高档估算。");
+  L.push("⑥ 汇率：1 USD = 汇率值（EUR/GBP/CAD），USD = 原币金额 ÷ 汇率；默认取 open.er-api.com 实时值（内置兜底 2026-10-12：EUR 0.892629 / GBP 0.755605 / CAD 1.425643），可手动修改。");
+  L.push("⑦ 出库费币种与销毁费一致（表内注明）。金额四舍五入到 2 位小数，USD 保留 4 位。");
+  L.push("⑧ 本工具为费用估算（参考），最终以仓库账单为准。");
+  return L.join("\n");
+}
+
+/* ============ 事件绑定 ============ */
+document.querySelectorAll("#unitPill button").forEach(b=>{
+  b.onclick = ()=>{ curUnit = b.dataset.u; syncUnit(); };
+});
+$("mSingle").onclick = ()=>{ $("mSingle").classList.add("on"); $("mBatch").classList.remove("on");
+  $("paneSingle").style.display=""; $("paneBatch").style.display="none"; $("calc").style.display=""; };
+$("mBatch").onclick = ()=>{ $("mBatch").classList.add("on"); $("mSingle").classList.remove("on");
+  $("paneBatch").style.display=""; $("paneSingle").style.display="none"; $("calc").style.display="none"; };
+$("calc").onclick = ()=>{ renderSingle(calcRecord(CUR_WH, $("w").value, $("pcs").value, curUnit)); };
+$("calcBatch").onclick = ()=>{ renderBatch(parseBatch($("batch").value)); };
+$("refresh").onclick = (e)=>{ e.preventDefault(); loadRates().then(()=>{ $("result").innerHTML='<div class="empty">汇率已更新，请重新计算。</div>'; }); };
+["rEUR","rGBP","rCAD"].forEach(id=>{ $(id).onchange = ()=>{ if($("result").querySelector(".usdbar")) $("calc").click(); }; });
+
+initWh();
+$("assumptions").textContent = assumptions();
+$("calc").click();
+loadRates();
+
+/* 供自动化验证使用 */
+window.PRICING = PRICING; window.calcRecord = calcRecord;
+window.__setWh = v => { $("wh").value=v; CUR_WH=v; syncWh(); };
+window.__setUnit = u => { curUnit=u; syncUnit(); };
+</script>
+</body>
+</html>
